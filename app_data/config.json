@@ -1,0 +1,12 @@
+{
+ "label_names": {
+  "0": "World",
+  "1": "Sports",
+  "2": "Business",
+  "3": "Sci/Tech"
+ },
+ "ood_threshold": {
+  "MiniLM": 0.4253707826137543,
+  "MPNet": 0.4404055178165436
+ }
+}

@@ -1,0 +1,56 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>News embedding lab</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+:root{--ink:#14213d;--bg:#eef2f6;--accent:#0f8b8d;--warn:#b8670a}
+body{background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+h1,h2{font-family:Georgia,"Times New Roman",serif;letter-spacing:-.01em}
+h1{font-size:clamp(2rem,5vw,3.2rem)}
+.lead2{max-width:62ch;color:#44516b}
+.panel{background:#fff;border:1px solid #d5dde8;border-radius:6px;padding:1.5rem}
+.btn-main{background:var(--ink);color:#fff;border:0}.btn-main:hover{background:#0b1429;color:#fff}
+.nav-tabs .nav-link{color:var(--ink)}.nav-tabs .nav-link.active{border-bottom-color:#fff;font-weight:600}
+.hit{border-left:4px solid var(--accent);padding:.5rem .9rem;margin-bottom:.7rem;background:#f7fafc}
+.sim{font-variant-numeric:tabular-nums;color:#44516b}
+.verdict-in{color:var(--accent)}.verdict-out{color:var(--warn)}
+td,th{font-variant-numeric:tabular-nums}
+</style></head><body><main class="container py-4" style="max-width:980px">
+<h1 class="mt-3">Find the story, check the topic</h1>
+<p class="lead2">Type a headline or sentence. The lab finds the closest news articles and tells you whether the text belongs to Sports, Business or Sci/Tech at all.</p>
+<ul class="nav nav-tabs mt-4" role="tablist">
+ <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#t-search">Search</button></li>
+ <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-ood">Topic check</button></li>
+ <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-res">Model comparison</button></li></ul>
+<div class="tab-content panel border-top-0 rounded-top-0">
+ <div class="mb-3 row g-2 align-items-end">
+  <div class="col-md-4"><label class="form-label" for="model">Model</label>
+   <select id="model" class="form-select">{% for m in models %}<option value="{{m}}">{{m}}{% if m not in live %} (stored articles only){% endif %}</option>{% endfor %}</select></div>
+  <div class="col-md-8"><label class="form-label" for="text">Your text</label>
+   <textarea id="text" class="form-control" rows="2" maxlength="2000" placeholder="e.g. Company shares fall after profit warning"></textarea></div>
+  <div class="col-12"><button class="btn btn-outline-secondary btn-sm" id="rand">Use a random stored test article</button>
+   <span id="tinfo" class="small text-secondary ms-2"></span></div></div>
+ <div class="tab-pane fade show active" id="t-search"><button class="btn btn-main" id="go-s">Find similar articles</button><div id="out-s" class="mt-3" aria-live="polite"></div></div>
+ <div class="tab-pane fade" id="t-ood"><button class="btn btn-main" id="go-o">Check topic</button><div id="out-o" class="mt-3" aria-live="polite"></div></div>
+ <div class="tab-pane fade" id="t-res">
+  <p class="lead2">Measured on 3,000 held-out articles from the 15,000-article sample. Higher is better, except hubness and the last row.</p>
+  <div class="table-responsive"><table class="table table-sm"><thead><tr><th></th>{% for m in results.models %}<th>{{m}}</th>{% endfor %}</tr></thead><tbody>
+  {% for r in results.rows %}<tr><td>{{r[0]}}</td>{% for v in r[1:] %}<td>{{v}}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div>
+  <h2 class="h5 mt-4">How far each model's closest match is for known vs. unknown topics</h2><img class="img-fluid" src="/static/ood_hist.png" alt="Histograms of top-1 similarity for in-domain and out-of-domain articles for each model">
+  <h2 class="h5 mt-4">Where the three categories sit (2D projection, not proof of structure)</h2><img class="img-fluid" src="/static/pca.png" alt="PCA scatter plots of Sports, Business and Sci/Tech articles for each model">
+ </div></div></main>
+<script>
+let tid=null;const $=id=>document.getElementById(id);
+$("text").addEventListener("input",()=>{tid=null;$("tinfo").textContent=""});
+$("rand").onclick=async()=>{const r=await (await fetch("/api/random_test")).json();$("text").value=r.text;tid=r.id;$("tinfo").textContent="Stored article, labelled "+r.category};
+async function call(url,out,render){const o=$(out);o.textContent="Working...";
+ const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:$("model").value,text:$("text").value,test_id:tid})});
+ const d=await r.json();o.textContent="";if(d.error){const p=document.createElement("div");p.className="alert alert-warning";p.textContent=d.error;o.append(p);return}render(d,o)}
+const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!==undefined)e.textContent=x;return e};
+$("go-s").onclick=()=>call("/api/search","out-s",(d,o)=>{
+ o.append(el("p","fw-semibold","Closest category: "+d.predicted+" ("+Math.round(d.agreement*100)+"% of the top 5 agree)"));
+ d.results.forEach(h=>{const b=el("div","hit");b.append(el("div","small sim",h.category+" | similarity "+h.similarity.toFixed(3)),el("div","",h.text));o.append(b)})});
+$("go-o").onclick=()=>call("/api/ood","out-o",(d,o)=>{
+ o.append(el("h2","h5 "+(d.in_domain?"verdict-in":"verdict-out"),d.in_domain?"Looks like Sports, Business or Sci/Tech":"Probably a different topic (for example World news)"));
+ o.append(el("p","sim","Closest match scores "+d.score.toFixed(3)+"; this model's cut-off is "+d.threshold.toFixed(3)+"."));
+ o.append(el("p","small","Nearest article ("+d.nearest_category+"): "+d.nearest))});
+</script><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script></body></html>

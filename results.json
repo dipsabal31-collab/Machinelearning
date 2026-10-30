@@ -1,0 +1,10 @@
+{"rows": [
+ ["Embedding size", "384", "768", "4096"],
+ ["Time to encode 15,000 texts (T4 GPU)", "13 s", "78 s", "about 37 min (4-bit)"],
+ ["Retrieval Precision@10", "0.886", "0.890", "0.897"],
+ ["Retrieval nDCG@10", "0.892", "0.897", "0.903"],
+ ["K-Means ARI (3 clusters)", "0.676", "0.626", "0.543"],
+ ["OOD ROC-AUC (World as OOD)", "0.867", "0.871", "0.874"],
+ ["Hubness skewness", "1.73", "1.36", "1.43"],
+ ["Queries where a hard negative beats every positive", "8.2%", "7.8%", "7.6%"]
+], "models": ["MiniLM", "MPNet", "NV-Embed"]}
